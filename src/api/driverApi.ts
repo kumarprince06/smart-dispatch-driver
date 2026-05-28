@@ -16,7 +16,7 @@ export interface DriverProfile {
 
 export const driverApi = {
   getMe: () => axiosInstance.get('/drivers/me'),
-  updateStatus: (status: 'ONLINE' | 'OFFLINE') => 
+  updateStatus: (status: 'AVAILABLE' | 'OFFLINE') => 
     axiosInstance.put('/drivers/me/status', { status }),
   updateLocation: (latitude: number, longitude: number) =>
     axiosInstance.put('/drivers/me/location', { latitude, longitude })

@@ -12,6 +12,7 @@ import {
   ChevronRight, Star, Zap, WifiOff,
 } from 'lucide-react-native';
 import { GlassCard, StatCard } from '../../components/common/Cards';
+import { CustomAlert } from '../../components/common/CustomAlert';
 import { COLORS, SIZES, TYPOGRAPHY, SHADOWS } from '../../theme/theme';
 import { useAuthStore } from '../../store/authStore';
 import { driverApi } from '../../api/driverApi';
@@ -33,6 +34,17 @@ export const HomeScreen = () => {
   const [earnings, setEarnings] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'error' | 'info' | 'logout';
+    buttons?: any[];
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Pulse ring animation when online
@@ -95,23 +107,35 @@ export const HomeScreen = () => {
     setIsRefreshing(false);
   }, [fetchDashboardData]);
 
-  // Toggle online/offline
   const handleToggleOnline = async (value: boolean) => {
     setIsOnline(value);
     try {
-      await driverApi.updateStatus(value ? 'ONLINE' : 'OFFLINE');
-    } catch (err) {
-      console.error('Failed to update status:', err);
+      await driverApi.updateStatus(value ? 'AVAILABLE' : 'OFFLINE');
+    } catch (err: any) {
+      console.error('Failed to update status:', err?.response?.data || err);
       setIsOnline(!value); // Revert on failure
-      Alert.alert('Error', 'Could not update your status. Please try again.');
+      const msg = err?.response?.data?.message || 'Could not update your status. Please try again.';
+      setAlertConfig({
+        visible: true,
+        title: 'Update Failed',
+        message: msg,
+        type: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
     }
   };
 
   const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: logout },
-    ]);
+    setAlertConfig({
+      visible: true,
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      type: 'logout',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: logout },
+      ]
+    });
   };
 
   const getGreeting = () => {
@@ -341,6 +365,11 @@ export const HomeScreen = () => {
           <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>
+
+      <CustomAlert
+        {...alertConfig}
+        onDismiss={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };
