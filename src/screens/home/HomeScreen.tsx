@@ -1,9 +1,12 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Alert, Animated, Switch,
+  TouchableOpacity, Animated, Switch,
   RefreshControl, ActivityIndicator,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { MainTabParamList } from '../../navigation/MainTabNavigator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -15,7 +18,7 @@ import { GlassCard, StatCard } from '../../components/common/Cards';
 import { CustomAlert } from '../../components/common/CustomAlert';
 import { COLORS, SIZES, TYPOGRAPHY, SHADOWS } from '../../theme/theme';
 import { useAuthStore } from '../../store/authStore';
-import { driverApi } from '../../api/driverApi';
+import { driverApi, DriverProfile } from '../../api/driverApi';
 import { orderApi, OrderResponse } from '../../api/orderApi';
 import { paymentApi } from '../../api/paymentApi';
 
@@ -28,7 +31,9 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string }> 
 
 export const HomeScreen = () => {
   const { user, logout } = useAuthStore();
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const [isOnline, setIsOnline] = useState(false);
+  const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [todayOrderCount, setTodayOrderCount] = useState(0);
   const [earnings, setEarnings] = useState(0);
@@ -66,8 +71,16 @@ export const HomeScreen = () => {
   // Fetch driver data
   const fetchDashboardData = useCallback(async () => {
     try {
-      // Fetch active orders (ASSIGNED + IN_TRANSIT + PICKED_UP)
-      const ordersRes = await orderApi.getDriverOrders(0, 20);
+      // Fetch profile and active orders concurrently
+      const [profileRes, ordersRes] = await Promise.all([
+        driverApi.getMe(),
+        orderApi.getDriverOrders(0, 20)
+      ]);
+
+      const driverData = profileRes.data.data;
+      setProfile(driverData);
+      setIsOnline(driverData.status === 'AVAILABLE' || driverData.status === 'ONLINE');
+
       const allOrders = ordersRes.data?.data?.content ?? [];
       
       // Filter active orders
@@ -91,7 +104,7 @@ export const HomeScreen = () => {
       setEarnings(totalEarnings);
 
     } catch (err) {
-      console.error('Failed to fetch orders:', err);
+      console.error('Failed to fetch dashboard data:', err);
     } finally {
       setIsLoadingOrders(false);
     }
@@ -176,7 +189,16 @@ export const HomeScreen = () => {
               <Text style={styles.greetingName}>{firstName} 👋</Text>
             </View>
             <View style={styles.headerRight}>
-              <TouchableOpacity style={styles.iconBtn}>
+              <TouchableOpacity 
+                style={styles.iconBtn}
+                onPress={() => setAlertConfig({
+                  visible: true,
+                  title: 'Notifications',
+                  message: 'You have no new notifications at the moment.',
+                  type: 'info',
+                  buttons: [{ text: 'Close', style: 'default' }]
+                })}
+              >
                 <Bell size={22} color={COLORS.text} />
                 <View style={styles.notifDot} />
               </TouchableOpacity>
@@ -251,23 +273,24 @@ export const HomeScreen = () => {
           <View style={styles.statsRow}>
             <StatCard
               label="Avg. Rating"
-              value="4.9"
+              value={profile?.rating ? profile.rating.toFixed(1) : "5.0"}
               icon={<Star size={22} color="#fff" />}
               gradient={['#F59E0B', '#D97706']}
+              sub={`${profile?.totalTrips || 0} trips`}
             />
             <View style={{ width: SIZES.sm }} />
             <StatCard
-              label="Hrs Active"
-              value="5.2h"
+              label="Wallet"
+              value={`₹${profile?.walletBalance?.toFixed(0) || 0}`}
               icon={<Clock size={22} color="#fff" />}
               gradient={['#EF4444', '#DC2626']}
+              sub="Available bal"
             />
           </View>
 
-          {/* ── Active Orders ── */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Orders</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Navigation')}>
               <Text style={styles.sectionLink}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -331,8 +354,11 @@ export const HomeScreen = () => {
                         </Text>
                       </View>
                       <Text style={styles.orderFee}>₹{order.deliveryFee ?? 0}</Text>
-                      <TouchableOpacity style={styles.viewBtn}>
-                        <Text style={styles.viewBtnText}>Details</Text>
+                      <TouchableOpacity 
+                        style={styles.viewBtn}
+                        onPress={() => navigation.navigate('Navigation')}
+                      >
+                        <Text style={styles.viewBtnText}>Track</Text>
                         <ChevronRight size={14} color={COLORS.primaryLight} />
                       </TouchableOpacity>
                     </View>
@@ -348,12 +374,17 @@ export const HomeScreen = () => {
           </View>
           <View style={styles.actionsGrid}>
             {[
-              { label: 'My Earnings', icon: <TrendingUp size={24} color={COLORS.accent} />, bg: 'rgba(20,184,166,0.15)' },
-              { label: 'Order History', icon: <CheckCircle size={24} color={COLORS.primary} />, bg: 'rgba(99,102,241,0.15)' },
-              { label: 'Navigation', icon: <MapPin size={24} color={COLORS.warning} />, bg: 'rgba(245,158,11,0.15)' },
-              { label: 'My Rating', icon: <Star size={24} color={COLORS.error} />, bg: 'rgba(239,68,68,0.15)' },
+              { label: 'My Earnings', icon: <TrendingUp size={24} color={COLORS.accent} />, bg: 'rgba(20,184,166,0.15)', route: 'Earnings' as const },
+              { label: 'Wallet', icon: <Wallet size={24} color={COLORS.primary} />, bg: 'rgba(99,102,241,0.15)', route: 'Earnings' as const },
+              { label: 'Navigation', icon: <MapPin size={24} color={COLORS.warning} />, bg: 'rgba(245,158,11,0.15)', route: 'Navigation' as const },
+              { label: 'My Rating', icon: <Star size={24} color={COLORS.error} />, bg: 'rgba(239,68,68,0.15)', route: 'Dashboard' as const },
             ].map((action, i) => (
-              <TouchableOpacity key={i} style={styles.actionItem} activeOpacity={0.8}>
+              <TouchableOpacity 
+                key={i} 
+                style={styles.actionItem} 
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate(action.route)}
+              >
                 <View style={[styles.actionIcon, { backgroundColor: action.bg }]}>
                   {action.icon}
                 </View>
