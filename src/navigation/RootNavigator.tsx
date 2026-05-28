@@ -16,11 +16,7 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const LoadingScreen = () => (
-  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
-    <ActivityIndicator size="large" color={COLORS.primary} />
-  </View>
-);
+import { SplashScreen } from '../screens/SplashScreen';
 
 export const RootNavigator = () => {
   const { user, isBootstrapping, bootstrap } = useAuthStore();
@@ -29,7 +25,7 @@ export const RootNavigator = () => {
     bootstrap();
   }, []);
 
-  if (isBootstrapping) return <LoadingScreen />;
+  if (isBootstrapping) return <SplashScreen />;
 
   return (
     <NavigationContainer>

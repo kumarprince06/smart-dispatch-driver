@@ -35,7 +35,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   // Restore session on app launch
   bootstrap: async () => {
     try {
-      const [token, userStr] = await AsyncStorage.multiGet(['accessToken', 'user']);
+      // Add minimum delay to show off splash screen animation
+      const minDelay = new Promise(resolve => setTimeout(resolve, 2500));
+      const bootstrapTask = AsyncStorage.multiGet(['accessToken', 'user']);
+      
+      const [, results] = await Promise.all([minDelay, bootstrapTask]);
+      const token = results[0];
+      const userStr = results[1];
+      
       const accessToken = token[1];
       const user = userStr[1] ? JSON.parse(userStr[1]) : null;
       if (accessToken && user) {
