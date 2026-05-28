@@ -1,7 +1,8 @@
 import axiosInstance from './axios';
 
 export interface OrderResponse {
-  id: number;
+  id?: number;
+  orderId?: number;
   trackingNumber: string;
   status: string;
   pickupAddress: string;
@@ -11,7 +12,8 @@ export interface OrderResponse {
   dropLatitude: number;
   dropLongitude: number;
   deliveryFee: number;
-  estimatedDistance: number;
+  estimatedDistance?: number;
+  distanceKm?: number;
   priority: string;
   createdAt: string;
 }

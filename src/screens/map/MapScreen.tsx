@@ -1,24 +1,68 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { Navigation, MapPin, Truck, Bike, Car } from 'lucide-react-native';
+import { Navigation, MapPin, Truck, Bike, Car, Package, CheckCircle } from 'lucide-react-native';
 import { COLORS, SIZES, TYPOGRAPHY, SHADOWS } from '../../theme/theme';
 import { GlassCard } from '../../components/common/Cards';
+import { CustomAlert } from '../../components/common/CustomAlert';
 import { LinearGradient } from 'expo-linear-gradient';
-import { driverApi, DriverProfile } from '../../api/driverApi';
+import { driverApi } from '../../api/driverApi';
+import { orderApi, OrderResponse } from '../../api/orderApi';
 
 const { width, height } = Dimensions.get('window');
 
-const MOCK_PICKUP = { latitude: 12.9352, longitude: 77.6245 }; // Koramangala
-const MOCK_DROP = { latitude: 12.9716, longitude: 77.5946 };   // MG Road
 const ORS_API_KEY = '5b3ce3597851110001cf62482d8a30b2452a445883bb9fe53d4220f4';
 
 export const MapScreen = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [vehicleType, setVehicleType] = useState<string>('TRUCK');
+  const [activeOrder, setActiveOrder] = useState<OrderResponse | null>(null);
+  const [isLoadingOrder, setIsLoadingOrder] = useState(true);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'error' | 'info' | 'logout';
+    buttons?: any[];
+  }>({ visible: false, title: '', message: '' });
+
   const webviewRef = useRef<WebView>(null);
+
+  const fetchActiveOrder = async () => {
+    setIsLoadingOrder(true);
+    try {
+      const res = await orderApi.getDriverOrders(0, 20);
+      const orders = res.data?.data?.content ?? [];
+      
+      // Priority: IN_TRANSIT -> PICKED_UP -> ASSIGNED
+      const inTransit = orders.find((o: OrderResponse) => o.status === 'IN_TRANSIT');
+      if (inTransit) {
+        setActiveOrder(inTransit);
+      } else {
+        const pickedUp = orders.find((o: OrderResponse) => o.status === 'PICKED_UP');
+        if (pickedUp) {
+          setActiveOrder(pickedUp);
+        } else {
+          const assigned = orders.find((o: OrderResponse) => o.status === 'ASSIGNED');
+          setActiveOrder(assigned || null);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch active order", e);
+    } finally {
+      setIsLoadingOrder(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchActiveOrder();
+    }, [])
+  );
 
   useEffect(() => {
     let locationSubscription: Location.LocationSubscription | null = null;
@@ -61,20 +105,28 @@ export const MapScreen = () => {
       }
 
       // Fetch Polyline from OpenRouteService
-      try {
-        const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${MOCK_PICKUP.longitude},${MOCK_PICKUP.latitude}&end=${MOCK_DROP.longitude},${MOCK_DROP.latitude}`;
-        const response = await fetch(url);
-        const data = await response.json();
+      const fetchRoute = async () => {
+        if (!activeOrder?.pickupLatitude || !activeOrder?.dropLatitude) return;
         
-        if (data.features && data.features.length > 0) {
-          // OpenRouteService returns [lng, lat]
-          const coordinates = data.features[0].geometry.coordinates;
-          // Leaflet expects [lat, lng]
-          const leafletCoords = coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
-          setRouteCoords(leafletCoords);
+        try {
+          const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${activeOrder.pickupLongitude},${activeOrder.pickupLatitude}&end=${activeOrder.dropLongitude},${activeOrder.dropLatitude}`;
+          const response = await fetch(url);
+          const data = await response.json();
+          
+          if (data.features && data.features.length > 0) {
+            // OpenRouteService returns [lng, lat]
+            const coordinates = data.features[0].geometry.coordinates;
+            // Leaflet expects [lat, lng]
+            const leafletCoords = coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
+            setRouteCoords(leafletCoords);
+          }
+        } catch (err) {
+          console.error("Failed to fetch route:", err);
         }
-      } catch (err) {
-        console.error("Failed to fetch route:", err);
+      };
+
+      if (activeOrder) {
+        fetchRoute();
       }
     })();
 
@@ -83,7 +135,7 @@ export const MapScreen = () => {
         locationSubscription.remove();
       }
     };
-  }, []);
+  }, [activeOrder?.orderId || activeOrder?.id]);
 
   const getLeafletHtml = () => {
     return `
@@ -140,13 +192,14 @@ export const MapScreen = () => {
           // Define bounds to fit all markers/routes
           const bounds = L.latLngBounds();
 
+          ${activeOrder ? `
           // Add Pickup Marker
           const pickupIcon = L.divIcon({
             className: 'custom-marker',
             html: '<div style="background-color: ${COLORS.primary}; width: 100%; height: 100%; border-radius: 50%;"></div>',
             iconSize: [24, 24]
           });
-          const pickupMarker = L.marker([${MOCK_PICKUP.latitude}, ${MOCK_PICKUP.longitude}], { icon: pickupIcon }).addTo(map);
+          const pickupMarker = L.marker([${activeOrder.pickupLatitude}, ${activeOrder.pickupLongitude}], { icon: pickupIcon }).addTo(map);
           bounds.extend(pickupMarker.getLatLng());
 
           // Add Drop Marker
@@ -155,8 +208,9 @@ export const MapScreen = () => {
             html: '<div style="background-color: ${COLORS.success}; width: 100%; height: 100%; border-radius: 50%;"></div>',
             iconSize: [24, 24]
           });
-          const dropMarker = L.marker([${MOCK_DROP.latitude}, ${MOCK_DROP.longitude}], { icon: dropIcon }).addTo(map);
+          const dropMarker = L.marker([${activeOrder.dropLatitude}, ${activeOrder.dropLongitude}], { icon: dropIcon }).addTo(map);
           bounds.extend(dropMarker.getLatLng());
+          ` : ''}
 
           // Add Route Polyline
           const routeCoords = ${JSON.stringify(routeCoords)};
@@ -170,7 +224,11 @@ export const MapScreen = () => {
           }
 
           // Fit bounds
-          map.fitBounds(bounds, { padding: [50, 50] });
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+          } else if (${location ? 'true' : 'false'}) {
+            map.setView([${location?.coords.latitude || 0}, ${location?.coords.longitude || 0}], 16);
+          }
 
           // Vehicle Icons logic
           const vType = '${vehicleType}';
@@ -219,6 +277,48 @@ export const MapScreen = () => {
     }
   };
 
+  const handleUpdateStatus = async (newStatus: string) => {
+    if (!activeOrder) return;
+    setIsUpdatingStatus(true);
+    try {
+      const orderId = activeOrder.orderId || activeOrder.id;
+      if (!orderId) throw new Error('No valid Order ID found');
+      await orderApi.updateOrderStatus(orderId, newStatus);
+      setAlertConfig({
+        visible: true,
+        title: 'Status Updated',
+        message: `Order marked as ${newStatus?.replace('_', ' ')}`,
+        type: 'info',
+        buttons: [{ text: 'OK', onPress: () => fetchActiveOrder() }]
+      });
+    } catch (e: any) {
+      setAlertConfig({
+        visible: true,
+        title: 'Update Failed',
+        message: e?.response?.data?.message || 'Could not update status',
+        type: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const getActionBtnConfig = () => {
+    switch(activeOrder?.status) {
+      case 'ASSIGNED':
+        return { text: 'Mark as Picked Up', icon: <Package size={20} color="#fff" />, action: 'PICKED_UP' };
+      case 'PICKED_UP':
+        return { text: 'Start Transit', icon: <Truck size={20} color="#fff" />, action: 'IN_TRANSIT' };
+      case 'IN_TRANSIT':
+        return { text: 'Mark as Delivered', icon: <CheckCircle size={20} color="#fff" />, action: 'DELIVERED' };
+      default:
+        return null;
+    }
+  };
+
+  const btnConfig = getActionBtnConfig();
+
   return (
     <View style={styles.container}>
       <WebView
@@ -236,48 +336,87 @@ export const MapScreen = () => {
 
       {/* Bottom Floating Card for Active Trip */}
       <View style={styles.bottomCardContainer}>
-        <GlassCard style={styles.tripCard}>
-          <View style={styles.dragHandle} />
-          
-          <View style={styles.tripHeader}>
-            <View style={styles.etaContainer}>
-              <Text style={styles.etaTime}>14 min</Text>
-              <Text style={styles.etaDistance}>4.2 km</Text>
+        {isLoadingOrder ? (
+          <GlassCard style={[styles.tripCard, { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }]}>
+            <ActivityIndicator size="large" color={COLORS.primaryLight} />
+            <Text style={{ ...TYPOGRAPHY.body2, color: COLORS.textMuted, marginTop: SIZES.md }}>Searching for active trip...</Text>
+          </GlassCard>
+        ) : activeOrder ? (
+          <GlassCard style={styles.tripCard}>
+            <View style={styles.dragHandle} />
+            
+            <View style={styles.tripHeader}>
+              <View style={styles.etaContainer}>
+                <Text style={styles.etaTime}>
+                  {activeOrder.distanceKm || activeOrder.estimatedDistance 
+                    ? Math.round((activeOrder.distanceKm || activeOrder.estimatedDistance || 0) * 3) + ' min' 
+                    : '—'}
+                </Text>
+                <Text style={styles.etaDistance}>
+                  {activeOrder.distanceKm || activeOrder.estimatedDistance 
+                    ? (activeOrder.distanceKm || activeOrder.estimatedDistance) + ' km' 
+                    : '—'}
+                </Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
+                <Text style={[styles.statusBadgeText, { color: COLORS.info }]}>{activeOrder?.status?.replace('_', ' ') || ''}</Text>
+              </View>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
-              <Text style={[styles.statusBadgeText, { color: COLORS.info }]}>IN TRANSIT</Text>
+
+            <View style={styles.addressRow}>
+              <View style={[styles.dot, { backgroundColor: COLORS.primary }]} />
+              <View style={styles.addressInfo}>
+                <Text style={styles.addressLabel}>Pickup</Text>
+                <Text style={styles.addressText} numberOfLines={2}>{activeOrder.pickupAddress}</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.addressRow}>
-            <View style={[styles.dot, { backgroundColor: COLORS.primary }]} />
-            <View style={styles.addressInfo}>
-              <Text style={styles.addressLabel}>Pickup</Text>
-              <Text style={styles.addressText}>12 MG Road, Bengaluru</Text>
+            <View style={styles.connector} />
+
+            <View style={styles.addressRow}>
+              <View style={[styles.dot, { backgroundColor: COLORS.success }]} />
+              <View style={styles.addressInfo}>
+                <Text style={styles.addressLabel}>Dropoff</Text>
+                <Text style={styles.addressText} numberOfLines={2}>{activeOrder.dropAddress}</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.connector} />
-
-          <View style={styles.addressRow}>
-            <View style={[styles.dot, { backgroundColor: COLORS.success }]} />
-            <View style={styles.addressInfo}>
-              <Text style={styles.addressLabel}>Dropoff</Text>
-              <Text style={styles.addressText}>45 Koramangala, Bengaluru</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity activeOpacity={0.8} style={{ marginTop: SIZES.lg }}>
-            <LinearGradient
-              colors={[COLORS.primaryLight, COLORS.primary]}
-              style={styles.actionBtn}
-            >
-              <Truck size={20} color="#fff" />
-              <Text style={styles.actionBtnText}>Mark as Delivered</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </GlassCard>
+            {btnConfig && (
+              <TouchableOpacity 
+                activeOpacity={0.8} 
+                style={{ marginTop: SIZES.lg }}
+                onPress={() => handleUpdateStatus(btnConfig.action)}
+                disabled={isUpdatingStatus}
+              >
+                <LinearGradient
+                  colors={[COLORS.primaryLight, COLORS.primary]}
+                  style={styles.actionBtn}
+                >
+                  {isUpdatingStatus ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      {btnConfig.icon}
+                      <Text style={styles.actionBtnText}>{btnConfig.text}</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+          </GlassCard>
+        ) : (
+          <GlassCard style={[styles.tripCard, { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }]}>
+            <Navigation size={40} color={COLORS.textMuted} />
+            <Text style={{ ...TYPOGRAPHY.h3, color: COLORS.text, marginTop: SIZES.md }}>No Active Trip</Text>
+            <Text style={{ ...TYPOGRAPHY.body2, color: COLORS.textMuted, marginTop: SIZES.xs, textAlign: 'center' }}>Go online from the dashboard to receive orders.</Text>
+          </GlassCard>
+        )}
       </View>
+
+      <CustomAlert
+        {...alertConfig}
+        onDismiss={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };

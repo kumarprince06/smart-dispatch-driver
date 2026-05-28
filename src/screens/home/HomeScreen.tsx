@@ -18,6 +18,7 @@ import { GlassCard, StatCard } from '../../components/common/Cards';
 import { CustomAlert } from '../../components/common/CustomAlert';
 import { COLORS, SIZES, TYPOGRAPHY, SHADOWS } from '../../theme/theme';
 import { useAuthStore } from '../../store/authStore';
+import * as Location from 'expo-location';
 import { driverApi, DriverProfile } from '../../api/driverApi';
 import { orderApi, OrderResponse } from '../../api/orderApi';
 import { paymentApi } from '../../api/paymentApi';
@@ -113,6 +114,53 @@ export const HomeScreen = () => {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Real-time location reporting to backend when online
+  useEffect(() => {
+    let locationSubscription: Location.LocationSubscription | null = null;
+    let isMounted = true;
+
+    const startTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('[Location Reporter] Permission not granted');
+          return;
+        }
+
+        // Periodically record and report location
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 15000, // every 15 seconds
+            distanceInterval: 15, // or every 15 meters
+          },
+          async (loc) => {
+            if (!isMounted) return;
+            try {
+              await driverApi.updateLocation(loc.coords.latitude, loc.coords.longitude);
+              console.log(`[Location Reporter] Updated coordinates: ${loc.coords.latitude}, ${loc.coords.longitude}`);
+            } catch (err) {
+              console.error('[Location Reporter] Failed to report location:', err);
+            }
+          }
+        );
+      } catch (err) {
+        console.error('[Location Reporter] Error starting tracking:', err);
+      }
+    };
+
+    if (isOnline) {
+      startTracking();
+    }
+
+    return () => {
+      isMounted = false;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, [isOnline]);
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -314,8 +362,9 @@ export const HomeScreen = () => {
             orders.map((order) => {
               const meta = STATUS_META[order.status] ?? STATUS_META['ASSIGNED'];
               const isUrgent = order.priority === 'URGENT';
+              const orderId = order.orderId || order.id;
               return (
-                <TouchableOpacity key={order.id} activeOpacity={0.85} style={{ marginBottom: SIZES.md }}>
+                <TouchableOpacity key={orderId} activeOpacity={0.85} style={{ marginBottom: SIZES.md }}>
                   <View style={[styles.orderCard, SHADOWS.md]}>
                     {isUrgent && (
                       <LinearGradient
@@ -350,7 +399,7 @@ export const HomeScreen = () => {
                       <View style={styles.orderMeta}>
                         <MapPin size={13} color={COLORS.textMuted} />
                         <Text style={styles.orderMetaText}>
-                          {order.estimatedDistance ? `${order.estimatedDistance} km` : '—'}
+                          {order.distanceKm || order.estimatedDistance ? `${order.distanceKm || order.estimatedDistance} km` : '—'}
                         </Text>
                       </View>
                       <Text style={styles.orderFee}>₹{order.deliveryFee ?? 0}</Text>
