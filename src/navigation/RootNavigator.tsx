@@ -10,6 +10,7 @@ import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
 import { EditVehicleScreen } from '../screens/profile/EditVehicleScreen';
 import { ChangePasswordScreen } from '../screens/profile/ChangePasswordScreen';
 import { useAuthStore } from '../store/authStore';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import { COLORS } from '../theme/theme';
 
 export type RootStackParamList = {
@@ -28,6 +29,9 @@ import { SplashScreen } from '../screens/SplashScreen';
 
 export const RootNavigator = () => {
   const { user, isBootstrapping, bootstrap } = useAuthStore();
+  
+  // Setup Push Notifications - Will only request/sync if user is logged in
+  usePushNotifications(!!user);
 
   useEffect(() => {
     bootstrap();

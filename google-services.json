@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "286301560296",
+    "project_id": "fatafat-51d32",
+    "storage_bucket": "fatafat-51d32.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:286301560296:android:1e69da811d8b204c65d85d",
+        "android_client_info": {
+          "package_name": "com.fatafat.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAH8aw76m3hiAh3weVuIrX4PYv3zR5AxP8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

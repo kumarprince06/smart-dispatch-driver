@@ -19,6 +19,8 @@ import { CustomAlert } from '../../components/common/CustomAlert';
 import { COLORS, SIZES, TYPOGRAPHY, SHADOWS } from '../../theme/theme';
 import { useAuthStore } from '../../store/authStore';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+import { BACKGROUND_LOCATION_TASK } from '../../tasks/locationTask';
 import { driverApi, DriverProfile } from '../../api/driverApi';
 import { orderApi, OrderResponse } from '../../api/orderApi';
 import { paymentApi } from '../../api/paymentApi';
@@ -166,13 +168,47 @@ export const HomeScreen = () => {
             }
           }
         );
+
+        // Also start background location tracking
+        try {
+          const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+          if (bgStatus === 'granted') {
+            await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 15000,
+              distanceInterval: 15,
+              showsBackgroundLocationIndicator: true,
+              foregroundService: {
+                notificationTitle: 'Smart Dispatch Active',
+                notificationBody: 'Tracking location for deliveries',
+                notificationColor: '#4f46e5',
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('[Location Reporter] Background location setup failed', e);
+        }
+
       } catch (err) {
         console.error('[Location Reporter] Error starting tracking:', err);
       }
     };
 
+    const stopBackgroundTracking = async () => {
+      try {
+        const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_LOCATION_TASK);
+        if (isRegistered) {
+          await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+        }
+      } catch (e) {
+        console.warn('Failed to stop background tracking', e);
+      }
+    };
+
     if (isOnline) {
       startTracking();
+    } else {
+      stopBackgroundTracking();
     }
 
     return () => {
