@@ -6,6 +6,9 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { MainTabNavigator } from './MainTabNavigator';
 import { OrderHistoryScreen } from '../screens/history/OrderHistoryScreen';
+import { EditProfileScreen } from '../screens/profile/EditProfileScreen';
+import { EditVehicleScreen } from '../screens/profile/EditVehicleScreen';
+import { ChangePasswordScreen } from '../screens/profile/ChangePasswordScreen';
 import { useAuthStore } from '../store/authStore';
 import { COLORS } from '../theme/theme';
 
@@ -14,6 +17,9 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   Home: undefined;
   OrderHistory: undefined;
+  EditProfile: undefined;
+  EditVehicle: undefined;
+  ChangePassword: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -37,6 +43,9 @@ export const RootNavigator = () => {
           <>
             <Stack.Screen name="Home" component={MainTabNavigator} />
             <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+            <Stack.Screen name="EditVehicle" component={EditVehicleScreen} />
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
           </>
         ) : (
           // Unauthenticated: show auth flow

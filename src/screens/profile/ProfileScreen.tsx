@@ -55,23 +55,33 @@ export const ProfileScreen = () => {
 
           {/* Profile Header */}
           <GlassCard style={styles.profileCard}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatarPlaceholder}>
-                <User size={32} color={COLORS.textMuted} />
-              </View>
-              <View>
-                <Text style={styles.nameText}>{profile?.firstName || user?.firstName} {profile?.lastName || user?.lastName}</Text>
-                <Text style={styles.emailText}>{user?.email}</Text>
-                <View style={styles.ratingBadge}>
-                  <Star size={12} color="#FBBF24" fill="#FBBF24" />
-                  <Text style={styles.ratingText}>{profile?.rating ? profile.rating.toFixed(1) : 'New'}</Text>
+            <View style={styles.headerRow}>
+              <View style={styles.avatarContainer}>
+                <View style={styles.avatarPlaceholder}>
+                  <User size={32} color={COLORS.textMuted} />
+                </View>
+                <View>
+                  <Text style={styles.nameText}>{profile?.firstName || user?.firstName} {profile?.lastName || user?.lastName}</Text>
+                  <Text style={styles.emailText}>{user?.email}</Text>
+                  <View style={styles.ratingBadge}>
+                    <Star size={12} color="#FBBF24" fill="#FBBF24" />
+                    <Text style={styles.ratingText}>{profile?.rating ? profile.rating.toFixed(1) : 'New'}</Text>
+                  </View>
                 </View>
               </View>
+              <TouchableOpacity onPress={() => navigation.navigate('EditProfile' as any)} style={styles.editIconBtn}>
+                <Settings size={20} color={COLORS.primaryLight} />
+              </TouchableOpacity>
             </View>
           </GlassCard>
 
           {/* Vehicle Info */}
-          <Text style={styles.sectionTitle}>Vehicle Details</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Vehicle Details</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('EditVehicle' as any)}>
+              <Text style={styles.editText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
           <GlassCard style={styles.sectionCard}>
             <View style={styles.infoRow}>
               <View style={styles.iconBox}>
@@ -109,7 +119,7 @@ export const ProfileScreen = () => {
 
             <View style={styles.divider} />
 
-            <TouchableOpacity style={styles.actionRow}>
+            <TouchableOpacity style={styles.actionRow} onPress={() => navigation.navigate('ChangePassword' as any)}>
               <Settings size={20} color={COLORS.text} />
               <Text style={styles.actionText}>Change Password</Text>
               <ChevronRight size={20} color={COLORS.textMuted} />
@@ -136,6 +146,8 @@ const styles = StyleSheet.create({
   pageTitle: { fontSize: 26, fontWeight: '800', color: COLORS.text, marginBottom: SIZES.xl },
   
   profileCard: { padding: SIZES.lg, marginBottom: SIZES.xl },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  editIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
   avatarContainer: { flexDirection: 'row', alignItems: 'center', gap: SIZES.lg },
   avatarPlaceholder: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
   nameText: { ...TYPOGRAPHY.h3, color: COLORS.text },
@@ -143,7 +155,9 @@ const styles = StyleSheet.create({
   ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(251, 191, 36, 0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start', marginTop: SIZES.sm, gap: 4 },
   ratingText: { fontSize: 12, fontWeight: '700', color: '#FBBF24' },
 
-  sectionTitle: { ...TYPOGRAPHY.body1, fontWeight: '700', color: COLORS.textMuted, marginBottom: SIZES.md, marginLeft: SIZES.xs },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SIZES.md, marginLeft: SIZES.xs, marginRight: SIZES.sm },
+  sectionTitle: { ...TYPOGRAPHY.body1, fontWeight: '700', color: COLORS.textMuted },
+  editText: { ...TYPOGRAPHY.body2, color: COLORS.primaryLight, fontWeight: '700' },
   sectionCard: { padding: SIZES.md, marginBottom: SIZES.xl },
   
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: SIZES.md, paddingVertical: SIZES.sm },

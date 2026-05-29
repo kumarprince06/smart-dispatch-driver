@@ -6,9 +6,19 @@ export interface DriverProfile {
   firstName: string;
   lastName: string;
   email: string;
-  phoneNo: string;
+  phoneNo?: string;
+  phoneNumber?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
   vehicleType: string;
   vehicleNumber: string;
+  vehicleModel?: string;
+  vehicleColor?: string;
+  vehicleYear?: number;
+  vehicleCapacityKg?: number;
+  licenseNumber?: string;
   status: string;
   currentLatitude?: number;
   currentLongitude?: number;
@@ -24,5 +34,7 @@ export const driverApi = {
   updateStatus: (status: 'AVAILABLE' | 'OFFLINE') => 
     axiosInstance.put('/drivers/me/status', { status }),
   updateLocation: (latitude: number, longitude: number) =>
-    axiosInstance.put('/drivers/me/location', { latitude, longitude })
+    axiosInstance.put('/drivers/me/location', { latitude, longitude }),
+  updateProfile: (id: number, data: any) =>
+    axiosInstance.put(`/drivers/${id}`, data)
 };
