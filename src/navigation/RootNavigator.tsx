@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { MainTabNavigator } from './MainTabNavigator';
+import { OrderHistoryScreen } from '../screens/history/OrderHistoryScreen';
 import { useAuthStore } from '../store/authStore';
 import { COLORS } from '../theme/theme';
 
@@ -12,6 +13,7 @@ export type RootStackParamList = {
   Login: undefined;
   ForgotPassword: undefined;
   Home: undefined;
+  OrderHistory: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -32,7 +34,10 @@ export const RootNavigator = () => {
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade_from_bottom' }}>
         {user ? (
           // Authenticated: show main app tabs
-          <Stack.Screen name="Home" component={MainTabNavigator} />
+          <>
+            <Stack.Screen name="Home" component={MainTabNavigator} />
+            <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+          </>
         ) : (
           // Unauthenticated: show auth flow
           <>

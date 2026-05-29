@@ -1,16 +1,18 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, Map as MapIcon, Wallet } from 'lucide-react-native';
+import { Home, Map as MapIcon, Wallet, User } from 'lucide-react-native';
 import { HomeScreen } from '../screens/home/HomeScreen';
 import { MapScreen } from '../screens/map/MapScreen';
 import { EarningsScreen } from '../screens/earnings/EarningsScreen';
+import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { COLORS, SHADOWS, SIZES } from '../theme/theme';
 
 export type MainTabParamList = {
   Dashboard: undefined;
   Navigation: undefined;
   Earnings: undefined;
+  Profile: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -51,11 +53,22 @@ export const MainTabNavigator = () => {
       />
       <Tab.Screen
         name="Earnings"
-        component={EarningsScreen} // Will build this next
+        component={EarningsScreen}
         options={{
           tabBarIcon: ({ color, focused }) => (
             <View style={focused ? styles.iconActive : styles.iconInactive}>
               <Wallet size={24} color={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.iconActive : styles.iconInactive}>
+              <User size={24} color={color} />
             </View>
           ),
         }}

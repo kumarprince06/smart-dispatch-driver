@@ -11,6 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { driverApi } from '../../api/driverApi';
 import { orderApi, OrderResponse } from '../../api/orderApi';
 
+import * as ImagePicker from 'expo-image-picker';
+
 const { width, height } = Dimensions.get('window');
 
 const ORS_API_KEY = '5b3ce3597851110001cf62482d8a30b2452a445883bb9fe53d4220f4';
@@ -38,7 +40,6 @@ export const MapScreen = () => {
       const res = await orderApi.getDriverOrders(0, 20);
       const orders = res.data?.data?.content ?? [];
       
-      // Priority: IN_TRANSIT -> PICKED_UP -> ASSIGNED
       const inTransit = orders.find((o: OrderResponse) => o.status === 'IN_TRANSIT');
       if (inTransit) {
         setActiveOrder(inTransit);
@@ -68,7 +69,6 @@ export const MapScreen = () => {
     let locationSubscription: Location.LocationSubscription | null = null;
 
     (async () => {
-      // Fetch Driver Profile for Vehicle Type
       try {
         const res = await driverApi.getMe();
         if (res.data?.data?.vehicleType) {
@@ -80,7 +80,6 @@ export const MapScreen = () => {
 
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        // Start watching position
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
@@ -90,7 +89,6 @@ export const MapScreen = () => {
           (loc) => {
             setLocation(loc);
             
-            // Send new location to the webview
             if (webviewRef.current) {
               const script = `
                 if (window.updateDriverMarker) {
@@ -104,7 +102,6 @@ export const MapScreen = () => {
         );
       }
 
-      // Fetch Polyline from OpenRouteService
       const fetchRoute = async () => {
         if (!activeOrder?.pickupLatitude || !activeOrder?.dropLatitude) return;
         
@@ -114,9 +111,7 @@ export const MapScreen = () => {
           const data = await response.json();
           
           if (data.features && data.features.length > 0) {
-            // OpenRouteService returns [lng, lat]
             const coordinates = data.features[0].geometry.coordinates;
-            // Leaflet expects [lat, lng]
             const leafletCoords = coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
             setRouteCoords(leafletCoords);
           }
@@ -133,11 +128,7 @@ export const MapScreen = () => {
     return () => {
       if (locationSubscription) {
         try {
-          if (typeof locationSubscription.remove === 'function') {
-            locationSubscription.remove();
-          } else if (typeof locationSubscription.unsubscribe === 'function') {
-            locationSubscription.unsubscribe();
-          }
+          locationSubscription.remove();
         } catch (e) {
           console.error('[MapScreen] Error cleanup location subscription:', e);
         }
@@ -157,7 +148,6 @@ export const MapScreen = () => {
           body { padding: 0; margin: 0; background-color: #0F172A; }
           html, body, #map { height: 100%; width: 100%; }
           
-          /* Leaflet Dark Theme Overrides */
           .leaflet-layer,
           .leaflet-control-zoom-in,
           .leaflet-control-zoom-out,
@@ -179,7 +169,7 @@ export const MapScreen = () => {
             align-items: center;
             background-color: #000;
             border-radius: 50%;
-            border: 2px solid #3b82f6; /* Blue border */
+            border: 2px solid #3b82f6;
             box-shadow: 0 0 15px rgba(59,130,246,0.6);
             color: #fff;
           }
@@ -197,11 +187,9 @@ export const MapScreen = () => {
             maxZoom: 19,
           }).addTo(map);
 
-          // Define bounds to fit all markers/routes
           const bounds = L.latLngBounds();
 
           ${activeOrder ? `
-          // Add Pickup Marker
           const pickupIcon = L.divIcon({
             className: 'custom-marker',
             html: '<div style="background-color: ${COLORS.primary}; width: 100%; height: 100%; border-radius: 50%;"></div>',
@@ -210,7 +198,6 @@ export const MapScreen = () => {
           const pickupMarker = L.marker([${activeOrder.pickupLatitude}, ${activeOrder.pickupLongitude}], { icon: pickupIcon }).addTo(map);
           bounds.extend(pickupMarker.getLatLng());
 
-          // Add Drop Marker
           const dropIcon = L.divIcon({
             className: 'custom-marker',
             html: '<div style="background-color: ${COLORS.success}; width: 100%; height: 100%; border-radius: 50%;"></div>',
@@ -220,7 +207,6 @@ export const MapScreen = () => {
           bounds.extend(dropMarker.getLatLng());
           ` : ''}
 
-          // Add Route Polyline
           const routeCoords = ${JSON.stringify(routeCoords)};
           if (routeCoords.length > 0) {
             const polyline = L.polyline(routeCoords, {
@@ -231,23 +217,19 @@ export const MapScreen = () => {
             bounds.extend(polyline.getBounds());
           }
 
-          // Fit bounds
           if (bounds.isValid()) {
             map.fitBounds(bounds, { padding: [50, 50] });
           } else if (${location ? 'true' : 'false'}) {
             map.setView([${location?.coords.latitude || 0}, ${location?.coords.longitude || 0}], 16);
           }
 
-          // Vehicle Icons logic
           const vType = '${vehicleType}';
-          let vehicleSvg = \`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11h1"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>\`; // Default Truck
+          let vehicleSvg = \`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11h1"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>\`;
           
           if (vType === 'BIKE' || vType === 'BICYCLE') {
             vehicleSvg = \`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm-3 11.5V14l-3-3 4-3 2 3h2"/></svg>\`;
           } else if (vType === 'CAR' || vType === 'AUTO_RICKSHAW') {
             vehicleSvg = \`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>\`;
-          } else if (vType === 'VAN' || vType === 'TEMPO') {
-            // Keep default truck
           }
 
           let driverMarker = null;
@@ -266,7 +248,6 @@ export const MapScreen = () => {
             }
           };
 
-          // Initialize with current location if available
           ${location ? `window.updateDriverMarker(${location.coords.latitude}, ${location.coords.longitude});` : ''}
 
         </script>
@@ -285,13 +266,13 @@ export const MapScreen = () => {
     }
   };
 
-  const handleUpdateStatus = async (newStatus: string) => {
+  const handleUpdateStatus = async (newStatus: string, proofUrl?: string) => {
     if (!activeOrder) return;
     setIsUpdatingStatus(true);
     try {
       const orderId = activeOrder.orderId || activeOrder.id;
       if (!orderId) throw new Error('No valid Order ID found');
-      await orderApi.updateOrderStatus(orderId, newStatus);
+      await orderApi.updateOrderStatus(orderId, newStatus, proofUrl);
       setAlertConfig({
         visible: true,
         title: 'Status Updated',
@@ -312,14 +293,40 @@ export const MapScreen = () => {
     }
   };
 
+  const handleProofOfDelivery = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      setAlertConfig({
+        visible: true,
+        title: 'Permission Denied',
+        message: 'Camera permission is required to capture proof of delivery.',
+        type: 'error',
+        buttons: [{ text: 'OK', style: 'default' }]
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      // In a real production app, upload \`result.assets[0].uri\` to a cloud bucket (e.g., S3/Cloudinary) 
+      // and get the resulting URL. For now, we simulate success with a placeholder URL.
+      handleUpdateStatus('DELIVERED', 'https://smartdispatch.storage/pod/mock-delivery-proof.jpg');
+    }
+  };
+
   const getActionBtnConfig = () => {
     switch(activeOrder?.status) {
       case 'ASSIGNED':
-        return { text: 'Mark as Picked Up', icon: <Package size={20} color="#fff" />, action: 'PICKED_UP' };
+        return { text: 'Mark as Picked Up', icon: <Package size={20} color="#fff" />, action: () => handleUpdateStatus('PICKED_UP') };
       case 'PICKED_UP':
-        return { text: 'Start Transit', icon: <Truck size={20} color="#fff" />, action: 'IN_TRANSIT' };
+        return { text: 'Start Transit', icon: <Truck size={20} color="#fff" />, action: () => handleUpdateStatus('IN_TRANSIT') };
       case 'IN_TRANSIT':
-        return { text: 'Mark as Delivered', icon: <CheckCircle size={20} color="#fff" />, action: 'DELIVERED' };
+        return { text: 'Capture Proof & Deliver', icon: <CheckCircle size={20} color="#fff" />, action: handleProofOfDelivery };
       default:
         return null;
     }
@@ -393,7 +400,7 @@ export const MapScreen = () => {
               <TouchableOpacity 
                 activeOpacity={0.8} 
                 style={{ marginTop: SIZES.lg }}
-                onPress={() => handleUpdateStatus(btnConfig.action)}
+                onPress={btnConfig.action}
                 disabled={isUpdatingStatus}
               >
                 <LinearGradient
