@@ -2,8 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../store/authStore';
 
-// Change this to your machine's local IP when testing on device
-export const BASE_URL = 'http://192.168.1.8:8080/api/v1';
+// Use Render URL for production!
+export const BASE_URL = 'https://fatafat-backend.onrender.com/api/v1';
 
 const api = axios.create({
   baseURL: BASE_URL,
