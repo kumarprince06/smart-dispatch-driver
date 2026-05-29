@@ -7,7 +7,7 @@ export const BASE_URL = 'https://fatafat-backend.onrender.com/api/v1';
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 60000, // 60 seconds for Render Free Tier cold start
   headers: { 'Content-Type': 'application/json' },
 });
 
