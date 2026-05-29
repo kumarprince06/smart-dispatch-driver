@@ -132,7 +132,15 @@ export const MapScreen = () => {
 
     return () => {
       if (locationSubscription) {
-        locationSubscription.remove();
+        try {
+          if (typeof locationSubscription.remove === 'function') {
+            locationSubscription.remove();
+          } else if (typeof locationSubscription.unsubscribe === 'function') {
+            locationSubscription.unsubscribe();
+          }
+        } catch (e) {
+          console.error('[MapScreen] Error cleanup location subscription:', e);
+        }
       }
     };
   }, [activeOrder?.orderId || activeOrder?.id]);

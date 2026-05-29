@@ -83,7 +83,7 @@ export const HomeScreen = () => {
       setIsOnline(driverData.status === 'AVAILABLE' || driverData.status === 'ONLINE');
 
       const allOrders = ordersRes.data?.data?.content ?? [];
-      
+
       // Filter active orders
       const activeOrders = allOrders.filter(
         (o: OrderResponse) => ['ASSIGNED', 'IN_TRANSIT', 'PICKED_UP'].includes(o.status)
@@ -117,29 +117,50 @@ export const HomeScreen = () => {
 
   // Real-time location reporting to backend when online
   useEffect(() => {
-    let locationSubscription: Location.LocationSubscription | null = null;
+    let locationSubscription: any = null;
     let isMounted = true;
 
     const startTracking = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!Location) {
+          console.warn('[Location Reporter] Location module is not loaded');
+          return;
+        }
+
+        const requestPermission = Location.requestForegroundPermissionsAsync;
+        if (typeof requestPermission !== 'function') {
+          console.warn('[Location Reporter] Permission request method not found');
+          return;
+        }
+
+        const { status } = await requestPermission();
         if (status !== 'granted') {
           console.warn('[Location Reporter] Permission not granted');
           return;
         }
 
+        const watchPosition = Location.watchPositionAsync;
+        if (typeof watchPosition !== 'function') {
+          console.warn('[Location Reporter] watchPositionAsync not found');
+          return;
+        }
+
+        const accuracyVal = Location.Accuracy ? (Location.Accuracy.Balanced || 3) : 3;
+
         // Periodically record and report location
-        locationSubscription = await Location.watchPositionAsync(
+        locationSubscription = await watchPosition(
           {
-            accuracy: Location.Accuracy.Balanced,
+            accuracy: accuracyVal,
             timeInterval: 15000, // every 15 seconds
             distanceInterval: 15, // or every 15 meters
           },
           async (loc) => {
             if (!isMounted) return;
             try {
-              await driverApi.updateLocation(loc.coords.latitude, loc.coords.longitude);
-              console.log(`[Location Reporter] Updated coordinates: ${loc.coords.latitude}, ${loc.coords.longitude}`);
+              if (driverApi && typeof driverApi.updateLocation === 'function') {
+                await driverApi.updateLocation(loc.coords.latitude, loc.coords.longitude);
+                console.log(`[Location Reporter] Updated coordinates: ${loc.coords.latitude}, ${loc.coords.longitude}`);
+              }
             } catch (err) {
               console.error('[Location Reporter] Failed to report location:', err);
             }
@@ -157,7 +178,15 @@ export const HomeScreen = () => {
     return () => {
       isMounted = false;
       if (locationSubscription) {
-        locationSubscription.remove();
+        try {
+          if (typeof locationSubscription.remove === 'function') {
+            locationSubscription.remove();
+          } else if (typeof locationSubscription.unsubscribe === 'function') {
+            locationSubscription.unsubscribe();
+          }
+        } catch (e) {
+          console.error('[Location Reporter] Error during subscription cleanup:', e);
+        }
       }
     };
   }, [isOnline]);
@@ -237,7 +266,7 @@ export const HomeScreen = () => {
               <Text style={styles.greetingName}>{firstName} 👋</Text>
             </View>
             <View style={styles.headerRight}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => setAlertConfig({
                   visible: true,
@@ -332,7 +361,7 @@ export const HomeScreen = () => {
               value={`₹${profile?.walletBalance?.toFixed(0) || 0}`}
               icon={<Clock size={22} color="#fff" />}
               gradient={['#EF4444', '#DC2626']}
-              sub="Available bal"
+              sub="Available balance"
             />
           </View>
 
@@ -403,7 +432,7 @@ export const HomeScreen = () => {
                         </Text>
                       </View>
                       <Text style={styles.orderFee}>₹{order.deliveryFee ?? 0}</Text>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.viewBtn}
                         onPress={() => navigation.navigate('Navigation')}
                       >
@@ -428,9 +457,9 @@ export const HomeScreen = () => {
               { label: 'Navigation', icon: <MapPin size={24} color={COLORS.warning} />, bg: 'rgba(245,158,11,0.15)', route: 'Navigation' as const },
               { label: 'My Rating', icon: <Star size={24} color={COLORS.error} />, bg: 'rgba(239,68,68,0.15)', route: 'Dashboard' as const },
             ].map((action, i) => (
-              <TouchableOpacity 
-                key={i} 
-                style={styles.actionItem} 
+              <TouchableOpacity
+                key={i}
+                style={styles.actionItem}
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate(action.route)}
               >
