@@ -83,18 +83,10 @@ async function registerForPushNotificationsAsync() {
     }
 
     try {
-      const projectId =
-        Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
-      if (!projectId) {
-        console.warn('Project ID not found in app.json. Get Expo push token might fail if not using Expo Go.');
-      }
-      token = (
-        await Notifications.getExpoPushTokenAsync({
-          projectId,
-        })
-      ).data;
+      const tokenData = await Notifications.getDevicePushTokenAsync();
+      token = tokenData.data;
     } catch (e) {
-      console.error(e);
+      console.error('Failed to get device push token:', e);
     }
   } else {
     console.log('Must use physical device for Push Notifications');
