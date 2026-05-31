@@ -8,13 +8,13 @@ export const COLORS = {
   surface: '#1E293B', // Slate 800
   surfaceLight: '#334155', // Slate 700
   
-  // Neon accents (Glassmorphism friendly)
-  primary: '#6366F1', // Indigo 500 (Matches admin panel)
-  primaryLight: '#818CF8', 
-  primaryDark: '#4338CA',
+  // FataFat Brand Colors
+  primary: '#2563EB', // Royal Blue — main brand color
+  primaryLight: '#EFF6FF', // Blue tint for backgrounds
+  primaryDark: '#1D4ED8', // Darker blue for pressed states
   
   // Secondary / Gradients
-  accent: '#14B8A6', // Teal 500
+  accent: '#F97316', // Orange — speed/energy accent
   
   // Semantic
   success: '#10B981', // Emerald 500
