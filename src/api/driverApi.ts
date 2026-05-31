@@ -36,5 +36,7 @@ export const driverApi = {
   updateLocation: (latitude: number, longitude: number) =>
     axiosInstance.put('/drivers/me/location', { latitude, longitude }),
   updateProfile: (id: number, data: any) =>
-    axiosInstance.put(`/drivers/${id}`, data)
+    axiosInstance.put(`/drivers/${id}`, data),
+  getTransactions: () => 
+    axiosInstance.get('/payments/my-transactions')
 };

@@ -9,12 +9,17 @@ import { StatCard, GlassCard } from '../../components/common/Cards';
 
 export const EarningsScreen = () => {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchEarnings = useCallback(async () => {
     try {
-      const res = await driverApi.getMe();
-      setProfile(res.data?.data);
+      const [resProfile, resTx] = await Promise.all([
+        driverApi.getMe(),
+        driverApi.getTransactions()
+      ]);
+      setProfile(resProfile.data?.data);
+      setTransactions(resTx.data?.data?.content || []);
     } catch (e) {
       console.error('Failed to fetch earnings', e);
     }
@@ -88,13 +93,29 @@ export const EarningsScreen = () => {
             />
           </View>
 
-          {/* Recent Payouts / Transactions Placeholder */}
+          {/* Recent Payouts / Transactions */}
           <Text style={[styles.sectionTitle, { marginTop: SIZES.lg }]}>Recent Transactions</Text>
-          <GlassCard style={styles.emptyState}>
-            <Clock size={40} color={COLORS.textMuted} />
-            <Text style={styles.emptyTitle}>No Recent Transactions</Text>
-            <Text style={styles.emptyText}>Complete deliveries to see your earnings history here.</Text>
-          </GlassCard>
+          {transactions.length === 0 ? (
+            <GlassCard style={styles.emptyState}>
+              <Clock size={40} color={COLORS.textMuted} />
+              <Text style={styles.emptyTitle}>No Recent Transactions</Text>
+              <Text style={styles.emptyText}>Complete deliveries to see your earnings history here.</Text>
+            </GlassCard>
+          ) : (
+            transactions.map(tx => (
+              <GlassCard key={tx.id} style={{ marginBottom: SIZES.md, padding: SIZES.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ ...TYPOGRAPHY.body1, fontWeight: '700', color: COLORS.text }}>{tx.type || 'DELIVERY_PAYOUT'}</Text>
+                  <Text style={{ ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 4 }}>
+                    {new Date(tx.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={{ ...TYPOGRAPHY.h3, color: COLORS.success }}>
+                  +₹{tx.amount?.toFixed(2)}
+                </Text>
+              </GlassCard>
+            ))
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
