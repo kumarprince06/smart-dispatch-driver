@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Dimensions, Platform, ActivityIndicator, Modal, TextInput, TouchableWithoutFeedback } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
@@ -31,6 +31,12 @@ export const MapScreen = () => {
     type?: 'error' | 'info' | 'logout';
     buttons?: any[];
   }>({ visible: false, title: '', message: '' });
+
+  // OTP validation states
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
+  const [otpInput, setOtpInput] = useState('');
+  const [otpTargetStatus, setOtpTargetStatus] = useState<string | null>(null);
+  const [pendingProofUrl, setPendingProofUrl] = useState<string | undefined>(undefined);
 
   const webviewRef = useRef<WebView>(null);
 
@@ -105,19 +111,45 @@ export const MapScreen = () => {
       const fetchRoute = async () => {
         if (!activeOrder?.pickupLatitude || !activeOrder?.dropLatitude) return;
         
+        // 1. Try OSRM first (Free, No Key, No CORS issues!)
+        try {
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${activeOrder.pickupLongitude},${activeOrder.pickupLatitude};${activeOrder.dropLongitude},${activeOrder.dropLatitude}?overview=full&geometries=geojson`;
+          const response = await fetch(osrmUrl);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.routes && data.routes.length > 0) {
+              const coordinates = data.routes[0].geometry.coordinates;
+              const leafletCoords = coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
+              setRouteCoords(leafletCoords);
+              return; // Success!
+            }
+          }
+        } catch (osrmError) {
+          console.warn("OSRM routing failed, trying ORS fallback:", osrmError);
+        }
+
+        // 2. Fallback to OpenRouteService (ORS)
         try {
           const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${activeOrder.pickupLongitude},${activeOrder.pickupLatitude}&end=${activeOrder.dropLongitude},${activeOrder.dropLatitude}`;
           const response = await fetch(url);
-          const data = await response.json();
-          
-          if (data.features && data.features.length > 0) {
-            const coordinates = data.features[0].geometry.coordinates;
-            const leafletCoords = coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
-            setRouteCoords(leafletCoords);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.features && data.features.length > 0) {
+              const coordinates = data.features[0].geometry.coordinates;
+              const leafletCoords = coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
+              setRouteCoords(leafletCoords);
+              return; // Success!
+            }
           }
         } catch (err) {
-          console.error("Failed to fetch route:", err);
+          console.error("ORS routing fallback failed too:", err);
         }
+
+        // 3. Absolute Fallback: Draw straight line if all routing engines are offline
+        setRouteCoords([
+          [activeOrder.pickupLatitude, activeOrder.pickupLongitude],
+          [activeOrder.dropLatitude, activeOrder.dropLongitude]
+        ]);
       };
 
       if (activeOrder) {
@@ -266,13 +298,13 @@ export const MapScreen = () => {
     }
   };
 
-  const handleUpdateStatus = async (newStatus: string, proofUrl?: string) => {
+  const handleUpdateStatus = async (newStatus: string, proofUrl?: string, otp?: string) => {
     if (!activeOrder) return;
     setIsUpdatingStatus(true);
     try {
       const orderId = activeOrder.orderId || activeOrder.id;
       if (!orderId) throw new Error('No valid Order ID found');
-      await orderApi.updateOrderStatus(orderId, newStatus, proofUrl);
+      await orderApi.updateOrderStatus(orderId, newStatus, proofUrl, otp);
       setAlertConfig({
         visible: true,
         title: 'Status Updated',
@@ -290,6 +322,17 @@ export const MapScreen = () => {
       });
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const triggerStatusUpdate = (status: string, proofUrl?: string) => {
+    if (status === 'PICKED_UP' || status === 'DELIVERED') {
+      setOtpTargetStatus(status);
+      setPendingProofUrl(proofUrl);
+      setOtpInput('');
+      setOtpModalVisible(true);
+    } else {
+      handleUpdateStatus(status, proofUrl);
     }
   };
 
@@ -313,18 +356,18 @@ export const MapScreen = () => {
     });
 
     if (!result.canceled) {
-      // In a real production app, upload \`result.assets[0].uri\` to a cloud bucket (e.g., S3/Cloudinary) 
+      // In a real production app, upload `result.assets[0].uri` to a cloud bucket (e.g., S3/Cloudinary) 
       // and get the resulting URL. For now, we simulate success with a placeholder URL.
-      handleUpdateStatus('DELIVERED', 'https://smartdispatch.storage/pod/mock-delivery-proof.jpg');
+      triggerStatusUpdate('DELIVERED', 'https://smartdispatch.storage/pod/mock-delivery-proof.jpg');
     }
   };
 
   const getActionBtnConfig = () => {
     switch(activeOrder?.status) {
       case 'ASSIGNED':
-        return { text: 'Mark as Picked Up', icon: <Package size={20} color="#fff" />, action: () => handleUpdateStatus('PICKED_UP') };
+        return { text: 'Mark as Picked Up', icon: <Package size={20} color="#fff" />, action: () => triggerStatusUpdate('PICKED_UP') };
       case 'PICKED_UP':
-        return { text: 'Start Transit', icon: <Truck size={20} color="#fff" />, action: () => handleUpdateStatus('IN_TRANSIT') };
+        return { text: 'Start Transit', icon: <Truck size={20} color="#fff" />, action: () => triggerStatusUpdate('IN_TRANSIT') };
       case 'IN_TRANSIT':
         return { text: 'Capture Proof & Deliver', icon: <CheckCircle size={20} color="#fff" />, action: handleProofOfDelivery };
       default:
@@ -432,6 +475,65 @@ export const MapScreen = () => {
         {...alertConfig}
         onDismiss={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
+
+      {/* Glassmorphic Premium OTP Input Modal */}
+      <Modal
+        transparent
+        visible={otpModalVisible}
+        animationType="fade"
+        onRequestClose={() => setOtpModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setOtpModalVisible(false)}>
+            <View style={styles.modalBackdrop} />
+          </TouchableWithoutFeedback>
+          <GlassCard style={styles.otpCard}>
+            <Text style={styles.otpTitle}>Enter Verification OTP</Text>
+            <Text style={styles.otpSub}>
+              Please enter the 4-digit {otpTargetStatus === 'PICKED_UP' ? 'Pickup' : 'Delivery'} OTP from the customer to verify this step.
+            </Text>
+            
+            <TextInput
+              style={styles.otpInput}
+              placeholder="0 0 0 0"
+              placeholderTextColor={COLORS.textMuted}
+              keyboardType="number-pad"
+              maxLength={4}
+              value={otpInput}
+              onChangeText={setOtpInput}
+              secureTextEntry={false}
+            />
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.cancelBtn]} 
+                onPress={() => setOtpModalVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.submitBtn]} 
+                onPress={() => {
+                  if (otpInput.length < 4) {
+                    setAlertConfig({
+                      visible: true,
+                      title: 'Invalid OTP',
+                      message: 'OTP must be exactly 4 digits',
+                      type: 'error'
+                    });
+                    return;
+                  }
+                  setOtpModalVisible(false);
+                  handleUpdateStatus(otpTargetStatus!, pendingProofUrl, otpInput);
+                }}
+              >
+                <Text style={styles.submitBtnText}>Verify & Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </GlassCard>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -506,4 +608,81 @@ const styles = StyleSheet.create({
     ...SHADOWS.glow,
   },
   actionBtnText: { ...TYPOGRAPHY.button, color: '#fff' },
+
+  // OTP Modal styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  otpCard: {
+    width: '85%',
+    backgroundColor: 'rgba(15, 23, 42, 0.98)',
+    borderRadius: SIZES.radiusLg,
+    padding: SIZES.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  otpTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.text,
+    marginBottom: SIZES.sm,
+  },
+  otpSub: {
+    ...TYPOGRAPHY.body2,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: SIZES.lg,
+  },
+  otpInput: {
+    width: '80%',
+    height: 56,
+    backgroundColor: 'rgba(30, 41, 59, 0.5)',
+    borderRadius: SIZES.radius,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    textAlign: 'center',
+    color: COLORS.text,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 8,
+    marginBottom: SIZES.xl,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: SIZES.md,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: SIZES.radius,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  submitBtn: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  cancelBtnText: {
+    ...TYPOGRAPHY.button,
+    color: COLORS.textMuted,
+  },
+  submitBtnText: {
+    ...TYPOGRAPHY.button,
+    color: '#fff',
+  },
 });

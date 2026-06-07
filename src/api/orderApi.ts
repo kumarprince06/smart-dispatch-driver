@@ -25,8 +25,8 @@ export const orderApi = {
     return axiosInstance.get('/orders/driver-orders', { params });
   },
 
-  updateOrderStatus: (orderId: number, status: string, proofOfDeliveryUrl?: string) =>
-    axiosInstance.patch(`/orders/${orderId}/status`, { status, proofOfDeliveryUrl }),
+  updateOrderStatus: (orderId: number, status: string, proofOfDeliveryUrl?: string, otp?: string) =>
+    axiosInstance.patch(`/orders/${orderId}/status`, { status, proofOfDeliveryUrl, otp }),
 
   getOrderById: (orderId: number) =>
     axiosInstance.get(`/orders/${orderId}`),
